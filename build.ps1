@@ -1,0 +1,1 @@
+$Env:GOOS="linux";$Env:GOARCH="amd64";go build -o mqtt_consumer_db ./main.go;
