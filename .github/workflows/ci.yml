@@ -20,5 +20,5 @@ jobs:
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         uses: actions/upload-artifact@v4.3.4
         with:
-          name: ${BRANCH_NAME}
+          name: mqtt_consumer_db
           path: mqtt_consumer_db
