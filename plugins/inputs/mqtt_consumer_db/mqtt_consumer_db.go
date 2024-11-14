@@ -34,6 +34,7 @@ type MQTTConsumerDB struct {
 	Mqtt_Consumer		*mqtt_consumer.MQTTConsumer		`toml:"mqtt_consumer"`
 	Parser 	  			*json_v2.Parser 				`toml:"json_v2"`
 	ServerID			string               			`toml:"server_id"`
+	Debug				bool							`toml:"debug"`
 	Log 				telegraf.Logger 				`toml:"-"`
 
 	parser        		telegraf.Parser
@@ -63,6 +64,12 @@ type subscribe_structure struct {
     Topic   string      `json:"pattern"`
 }
 
+func debug_log(formatted_text string, args ...any) {
+	if instance.Debug {
+		fmt.Fprintf(os.Stderr, fmt.Sprintf(formatted_text + "\n", args...))
+	}
+}
+
 // create_topics retrieves the subscribe ACL (Access Control List) for a given client ID from the database
 // and returns a list of topics that the client is allowed to subscribe to or an error if the database query 
 // or unmarshaling fails.
@@ -82,6 +89,8 @@ func create_topics(client_id string) ([]string, error) {
 	for _, topic := range topics {
 		result = append(result, topic.Topic)
 	}
+	
+	debug_log("Topics: %v", result)
 
 	return result, nil
 }
@@ -116,12 +125,13 @@ func listen() {
 
 		// Check if the notification is for the current client (the server itself)
 		// and if so, update the topics
+		debug_log("Topic Update")
 		if notify != nil && notify.Channel == "mqtt_topics_changed" && notify.Payload == instance.Mqtt_Consumer.ClientID {
-			instance.Log.Debugf("[listen] received notification on channel %q with payload %q", notify.Channel, notify.Payload)
+			debug_log("[listen] received notification on channel %q with payload %q", notify.Channel, notify.Payload)
 
 			instance.Mqtt_Consumer.Topics, err = create_topics(instance.Mqtt_Consumer.ClientID)
 			if err != nil {
-				instance.Log.Debugf("[listen] error creating topics: %w", err)
+				debug_log("[listen] error creating topics: %w", err)
 			} else {
 				instance.Mqtt_Consumer.Stop()
 				instance.Mqtt_Consumer.Start(instance.acc)
@@ -131,7 +141,7 @@ func listen() {
 		
 		select {
 		case <-ctx.Done():
-			instance.Log.Debug("context done. Close Listener.")
+			debug_log("context done. Close Listener.")
 			conn.Conn().Close(context.Background())
 			return
 		default:
@@ -152,9 +162,8 @@ func (m *MQTTConsumerDB) Description() string {
 }
 
 func (m *MQTTConsumerDB) Init() error {
-	m.Log.Debug("Init MQTTConsumerDB")
-
 	instance = m
+	debug_log("Init MQTTConsumerDB")
 
 	// Build the connection string
 	var username, password string
@@ -204,7 +213,7 @@ func (m *MQTTConsumerDB) Init() error {
 }
 
 func (m *MQTTConsumerDB) Start(acc telegraf.Accumulator) error {
-	m.acc = acc // save the accumulator in case we need to restart the plugin
+	m.acc = &CustomAccumulator{acc} // save the accumulator in case we need to restart the plugin
 	m.Mqtt_Consumer.Log = m.Log
 	m.parser = m.Parser
 
@@ -233,7 +242,7 @@ func (m *MQTTConsumerDB) Start(acc telegraf.Accumulator) error {
 	go listen()
 
 	// Start the MQTT consumer
-	return m.Mqtt_Consumer.Start(acc)
+	return m.Mqtt_Consumer.Start(instance.acc)
 }
 
 func (m *MQTTConsumerDB) Stop() {
