@@ -39,6 +39,10 @@ func (a *CustomTrackingAccumulator) AddTrackingMetricGroup(group []telegraf.Metr
 			if len(s) > 1 {
 				m.SetName(s[1])
 			}
+			if len(s) > 0 {
+				m.AddTag("root", strings.Join(s[:len(s)-1], "/"))
+				m.AddTag("domain", s[len(s)-1])
+			}
 		}
 	}
 
